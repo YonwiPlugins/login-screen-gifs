@@ -1,7 +1,9 @@
 package com.yonwiplugins.loginscreengifs;
 
+import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -13,9 +15,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Stream;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageReader;
-import javax.imageio.stream.ImageInputStream;
 import javax.inject.Inject;
 import net.runelite.client.RuneLite;
 
@@ -63,7 +62,7 @@ final class GifLibrary
         return files;
     }
 
-    ImageInputStream open(File gif) throws IOException
+    InputStream open(File gif) throws IOException
     {
         ensureDirectory();
         if (gif == null || !isManagedGif(gif))
@@ -71,12 +70,7 @@ final class GifLibrary
             throw new IOException("GIF is not a readable file in " + directory);
         }
 
-        ImageInputStream input = ImageIO.createImageInputStream(gif);
-        if (input == null)
-        {
-            throw new IOException("Unable to open " + gif.getName());
-        }
-        return input;
+        return new BufferedInputStream(Files.newInputStream(gif.toPath()));
     }
 
     ImportSummary importEntries(List<File> entries) throws IOException
@@ -198,34 +192,13 @@ final class GifLibrary
             throw new IOException("not a regular file");
         }
 
-        try (ImageInputStream input = ImageIO.createImageInputStream(source))
+        try (InputStream input = new BufferedInputStream(Files.newInputStream(source.toPath())))
         {
-            if (input == null)
+            StreamingGifReader reader = new StreamingGifReader();
+            int frames = reader.read(input, (frame, durationMillis) -> false);
+            if (frames == 0)
             {
-                throw new IOException("unreadable file");
-            }
-            java.util.Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
-            if (!readers.hasNext())
-            {
-                throw new IOException("not a readable GIF");
-            }
-
-            ImageReader reader = readers.next();
-            try
-            {
-                if (!"gif".equalsIgnoreCase(reader.getFormatName()))
-                {
-                    throw new IOException("not a GIF");
-                }
-                reader.setInput(input, true, true);
-                if (reader.getWidth(0) <= 0 || reader.getHeight(0) <= 0)
-                {
-                    throw new IOException("GIF has no readable image");
-                }
-            }
-            finally
-            {
-                reader.dispose();
+                throw new IOException("GIF has no readable image");
             }
         }
     }
