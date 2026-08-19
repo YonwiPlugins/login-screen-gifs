@@ -132,6 +132,24 @@ public class GifDecoderTest
             9);
     }
 
+    @Test
+    public void createsThumbnailFromFirstGifFrame() throws Exception
+    {
+        BufferedImage thumbnail = GifThumbnailLoader.load(
+            new ByteArrayInputStream(createGif(2, 5)),
+            72,
+            42);
+        try
+        {
+            assertEquals(72, thumbnail.getWidth());
+            assertEquals(42, thumbnail.getHeight());
+        }
+        finally
+        {
+            thumbnail.flush();
+        }
+    }
+
     private static byte[] createGif(int frameCount, int delayHundredths) throws IOException
     {
         Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("gif");

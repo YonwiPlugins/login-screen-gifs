@@ -6,15 +6,21 @@ import java.awt.Dimension;
 import java.awt.GridLayout;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.UnsupportedFlavorException;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
@@ -48,6 +54,7 @@ final class LoginScreenGifsPanel extends PluginPanel
     private final JLabel importStatus = new JLabel(" ");
     private final DefaultListModel<File> gifModel = new DefaultListModel<>();
     private final JList<File> gifList = new JList<>(gifModel);
+    private final Map<File, ImageIcon> thumbnailIcons = new HashMap<>();
     private final JComboBox<CycleTrigger> cycleTrigger = new JComboBox<>(CycleTrigger.values());
     private final JComboBox<CycleOrder> cycleOrder = new JComboBox<>(CycleOrder.values());
     private final JSpinner rotationInterval = new JSpinner(new SpinnerNumberModel(60, 5, 3600, 5));
@@ -129,14 +136,20 @@ final class LoginScreenGifsPanel extends PluginPanel
         gifList.setCellRenderer((list, value, index, isSelected, cellHasFocus) ->
         {
             DefaultListCellRenderer renderer = new DefaultListCellRenderer();
-            return renderer.getListCellRendererComponent(
+            JLabel label = (JLabel) renderer.getListCellRendererComponent(
                 list,
                 value == null ? "" : value.getName(),
                 index,
                 isSelected,
                 cellHasFocus);
+            label.setIcon(value == null ? null : thumbnailIcons.get(value));
+            label.setIconTextGap(8);
+            label.setBorder(BorderFactory.createEmptyBorder(3, 4, 3, 4));
+            label.setToolTipText(value == null ? null : value.getName());
+            return label;
         });
         gifList.setVisibleRowCount(7);
+        gifList.setFixedCellHeight(50);
         gifList.setToolTipText("Select a GIF to use immediately");
         gifList.addListSelectionListener(event ->
         {
@@ -150,7 +163,7 @@ final class LoginScreenGifsPanel extends PluginPanel
             }
         });
         JScrollPane gifScroll = new JScrollPane(gifList);
-        gifScroll.setPreferredSize(new Dimension(0, 160));
+        gifScroll.setPreferredSize(new Dimension(0, 250));
         gifScroll.setAlignmentX(LEFT_ALIGNMENT);
         content.add(gifScroll);
         content.add(Box.createVerticalStrut(6));
@@ -224,17 +237,31 @@ final class LoginScreenGifsPanel extends PluginPanel
         syncConfig(config);
     }
 
-    void updateFiles(List<File> files, File selected)
+    void updateFiles(List<File> files, File selected, Map<File, BufferedImage> thumbnails)
     {
         SwingUtilities.invokeLater(() ->
         {
             updating = true;
             try
             {
-                gifModel.clear();
-                for (File file : files)
+                Set<File> availableFiles = new HashSet<>(files);
+                thumbnailIcons.keySet().retainAll(availableFiles);
+                for (Map.Entry<File, BufferedImage> entry : thumbnails.entrySet())
                 {
-                    gifModel.addElement(file);
+                    ImageIcon current = thumbnailIcons.get(entry.getKey());
+                    if (current == null || current.getImage() != entry.getValue())
+                    {
+                        thumbnailIcons.put(entry.getKey(), new ImageIcon(entry.getValue()));
+                    }
+                }
+
+                if (!modelMatches(files))
+                {
+                    gifModel.clear();
+                    for (File file : files)
+                    {
+                        gifModel.addElement(file);
+                    }
                 }
                 if (selected == null)
                 {
@@ -243,18 +270,38 @@ final class LoginScreenGifsPanel extends PluginPanel
                 }
                 else
                 {
-                    gifList.setSelectedValue(selected, true);
+                    if (!selected.equals(gifList.getSelectedValue()))
+                    {
+                        gifList.setSelectedValue(selected, true);
+                    }
                     activeGif.setText("Active: " + selected.getName());
                 }
                 gifCount.setText(files.size() + (files.size() == 1 ? " GIF in library" : " GIFs in library"));
                 previous.setEnabled(files.size() > 1);
                 next.setEnabled(files.size() > 1);
+                gifList.repaint();
             }
             finally
             {
                 updating = false;
             }
         });
+    }
+
+    private boolean modelMatches(List<File> files)
+    {
+        if (gifModel.size() != files.size())
+        {
+            return false;
+        }
+        for (int index = 0; index < files.size(); index++)
+        {
+            if (!files.get(index).equals(gifModel.get(index)))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     void syncConfig(LoginScreenGifsConfig config)
