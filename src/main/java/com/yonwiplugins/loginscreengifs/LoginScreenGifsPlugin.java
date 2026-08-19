@@ -473,10 +473,16 @@ public class LoginScreenGifsPlugin extends Plugin
         }
         try
         {
-            currentSprite = ImageUtil.getImageSpritePixels(frame.getImage(), client);
-            client.setLoginScreen(currentSprite);
+            SpritePixels nextSprite = ImageUtil.getImageSpritePixels(frame.getImage(), client);
+            // Reinstalling the login-screen sprite rebuilds the title UI and closes
+            // the vanilla world selector. Keep one installed sprite and update it.
+            if (!loginScreenApplied || !copyFramePixels(currentSprite, nextSprite))
+            {
+                currentSprite = nextSprite;
+                client.setLoginScreen(currentSprite);
+                loginScreenApplied = true;
+            }
             client.setShouldRenderLoginScreenFire(false);
-            loginScreenApplied = true;
             nextFrameAtNanos = now + TimeUnit.MILLISECONDS.toNanos(frame.getDurationMillis());
             if (authenticatorActive)
             {
@@ -535,6 +541,25 @@ public class LoginScreenGifsPlugin extends Plugin
         return GifSelection.next(gifFiles.size(), currentIndex, 1);
     }
 
+    static boolean copyFramePixels(SpritePixels installed, SpritePixels next)
+    {
+        if (installed == null || next == null
+            || installed.getWidth() != next.getWidth()
+            || installed.getHeight() != next.getHeight())
+        {
+            return false;
+        }
+
+        int[] installedPixels = installed.getPixels();
+        int[] nextPixels = next.getPixels();
+        if (installedPixels == null || nextPixels == null || installedPixels.length != nextPixels.length)
+        {
+            return false;
+        }
+        System.arraycopy(nextPixels, 0, installedPixels, 0, nextPixels.length);
+        return true;
+    }
+
     private void selectIndex(int index, boolean restart, boolean resetShuffle)
     {
         if (index < 0 || index >= gifFiles.size())
@@ -588,7 +613,6 @@ public class LoginScreenGifsPlugin extends Plugin
             decoder.stop();
             decoderRunning = false;
         }
-        currentSprite = null;
         nextFrameAtNanos = 0L;
         if (backgroundVisible && currentGif != null)
         {

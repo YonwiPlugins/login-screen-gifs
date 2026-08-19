@@ -6,12 +6,20 @@ final class LoginFlowTracker
 {
     private boolean loginFlowActive;
     private boolean worldHopActive;
+    private boolean loginScreenWorldSwitchActive;
 
     Transition accept(GameState gameState)
     {
         if (gameState == GameState.HOPPING)
         {
+            if (loginFlowActive)
+            {
+                loginScreenWorldSwitchActive = true;
+                worldHopActive = false;
+                return new Transition(false, true, false, false);
+            }
             worldHopActive = true;
+            loginScreenWorldSwitchActive = false;
             loginFlowActive = false;
             return Transition.restore();
         }
@@ -19,6 +27,7 @@ final class LoginFlowTracker
         if (gameState == GameState.LOGGED_IN)
         {
             worldHopActive = false;
+            loginScreenWorldSwitchActive = false;
             loginFlowActive = false;
             return Transition.restore();
         }
@@ -29,6 +38,10 @@ final class LoginFlowTracker
             {
                 return Transition.restore();
             }
+            if (loginScreenWorldSwitchActive)
+            {
+                return new Transition(false, true, false, false);
+            }
             return new Transition(false, loginFlowActive, loginFlowActive, false);
         }
 
@@ -38,6 +51,7 @@ final class LoginFlowTracker
         {
             boolean loginStarted = !loginFlowActive;
             worldHopActive = false;
+            loginScreenWorldSwitchActive = false;
             loginFlowActive = true;
             boolean frameUpdatesAllowed = gameState != GameState.LOGIN_SCREEN_AUTHENTICATOR;
             return new Transition(loginStarted, true, frameUpdatesAllowed, false);
@@ -54,6 +68,11 @@ final class LoginFlowTracker
     boolean isWorldHopActive()
     {
         return worldHopActive;
+    }
+
+    boolean isLoginScreenWorldSwitchActive()
+    {
+        return loginScreenWorldSwitchActive;
     }
 
     static final class Transition
