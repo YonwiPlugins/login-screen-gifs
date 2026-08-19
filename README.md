@@ -12,6 +12,7 @@ A RuneLite plugin by YonwiPlugins for putting your own animated GIFs behind the 
 - Change GIF on RuneLite start, on each real login, after a full GIF loop, or on a configurable timer.
 - The old Fallback FPS checkbox is gone. GIFs normally say how long each frame should stay on screen, and if one does not, the plugin picks a sensible backup automatically.
 - World hopping no longer restarts the login background during the hop.
+- The 2FA screen keeps the background but pauses frame swaps while you enter the six-digit PIN.
 
 ## Side panel
 
@@ -59,4 +60,4 @@ GIF decoding happens on a background thread. Only the active GIF is decoded, and
 
 Files are checked as real GIFs before import. Matching filenames are kept by adding `(2)`, `(3)`, and so on instead of overwriting an existing file.
 
-The plugin does not register a keyboard listener or read login details.
+On the authenticator screen the current background remains visible, but animation updates stop until the PIN screen is left. The plugin does not register a keyboard listener or read login details.

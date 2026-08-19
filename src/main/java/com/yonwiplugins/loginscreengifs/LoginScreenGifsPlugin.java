@@ -379,7 +379,7 @@ public class LoginScreenGifsPlugin extends Plugin
         }
 
         LoginFlowTracker.Transition transition = flowTracker.accept(gameState);
-        authenticatorActive = false;
+        authenticatorActive = gameState == GameState.LOGIN_SCREEN_AUTHENTICATOR;
         if (transition.shouldRestoreBackground())
         {
             stopAndRestore();

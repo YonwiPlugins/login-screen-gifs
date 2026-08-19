@@ -39,7 +39,8 @@ final class LoginFlowTracker
             boolean loginStarted = !loginFlowActive;
             worldHopActive = false;
             loginFlowActive = true;
-            return new Transition(loginStarted, true, true, false);
+            boolean frameUpdatesAllowed = gameState != GameState.LOGIN_SCREEN_AUTHENTICATOR;
+            return new Transition(loginStarted, true, frameUpdatesAllowed, false);
         }
 
         return new Transition(false, loginFlowActive, false, false);

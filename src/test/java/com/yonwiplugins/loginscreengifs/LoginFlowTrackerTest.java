@@ -63,4 +63,17 @@ public class LoginFlowTrackerTest
         assertTrue(login.isFrameUpdatesAllowed());
         assertFalse(tracker.isWorldHopActive());
     }
+
+    @Test
+    public void authenticatorKeepsBackgroundButPausesFrameSwaps()
+    {
+        LoginFlowTracker tracker = new LoginFlowTracker();
+        tracker.accept(GameState.LOGIN_SCREEN);
+
+        LoginFlowTracker.Transition authenticator = tracker.accept(GameState.LOGIN_SCREEN_AUTHENTICATOR);
+        assertFalse(authenticator.isLoginStarted());
+        assertTrue(authenticator.isBackgroundVisible());
+        assertFalse(authenticator.isFrameUpdatesAllowed());
+        assertFalse(authenticator.shouldRestoreBackground());
+    }
 }
