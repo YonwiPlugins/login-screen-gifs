@@ -11,6 +11,7 @@ A RuneLite plugin by YonwiPlugins for putting your own animated GIFs behind the 
 - Choose one GIF, move through the library in order, or pick randomly.
 - Change GIF on RuneLite start, on each real login, after a full GIF loop, or on a configurable timer.
 - The old Fallback FPS checkbox is gone. GIFs normally say how long each frame should stay on screen, and if one does not, the plugin picks a sensible backup automatically.
+- World hopping no longer restarts the login background during the hop.
 
 ## Side panel
 

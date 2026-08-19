@@ -67,6 +67,7 @@ public class LoginScreenGifsPlugin extends Plugin
     private GifDecoder decoder;
 
     private final AtomicBoolean frameUpdateQueued = new AtomicBoolean();
+    private LoginFlowTracker flowTracker;
     private ExecutorService libraryExecutor;
     private ScheduledExecutorService animationExecutor;
     private ScheduledFuture<?> animationTask;
@@ -83,7 +84,6 @@ public class LoginScreenGifsPlugin extends Plugin
     private boolean loginScreenApplied;
     private boolean backgroundVisible;
     private boolean authenticatorActive;
-    private boolean loginFlowActive;
     private boolean sessionRotationPending;
     private boolean loginRotationPending;
     private volatile boolean running;
@@ -93,7 +93,7 @@ public class LoginScreenGifsPlugin extends Plugin
     protected void startUp()
     {
         running = true;
-        loginFlowActive = false;
+        flowTracker = new LoginFlowTracker();
         sessionRotationPending = config.cycleTrigger() == CycleTrigger.SESSION;
         loginRotationPending = false;
         resetPlayback();
@@ -378,32 +378,28 @@ public class LoginScreenGifsPlugin extends Plugin
             return;
         }
 
-        if (gameState == GameState.LOGGED_IN || gameState == GameState.HOPPING)
+        LoginFlowTracker.Transition transition = flowTracker.accept(gameState);
+        authenticatorActive = false;
+        if (transition.shouldRestoreBackground())
         {
-            loginFlowActive = false;
             stopAndRestore();
             return;
         }
 
-        if (gameState != GameState.LOGIN_SCREEN
-            && gameState != GameState.LOGIN_SCREEN_AUTHENTICATOR
-            && gameState != GameState.LOGGING_IN
-            && gameState != GameState.LOADING)
+        backgroundVisible = transition.isBackgroundVisible();
+        if (!backgroundVisible)
         {
             framePumpEnabled = false;
             return;
         }
 
-        boolean loginStarted = !loginFlowActive;
-        loginFlowActive = true;
-        backgroundVisible = true;
-        authenticatorActive = false;
-        if (loginStarted)
+        if (transition.isLoginStarted())
         {
             rotateForLoginIfNeeded();
         }
         startDecoder();
-        framePumpEnabled = currentGif != null;
+        framePumpEnabled = currentGif != null
+            && (transition.isFrameUpdatesAllowed() || !loginScreenApplied);
     }
 
     private void rotateForLoginIfNeeded()
