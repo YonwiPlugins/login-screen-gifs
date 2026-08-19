@@ -6,7 +6,9 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
@@ -33,6 +35,7 @@ public class GifDecoderTest
         GifDecoder decoder = decoderFor(gif);
         int decoded = 0;
         long duration = 0L;
+        Set<Integer> frameSignatures = new HashSet<>();
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10L);
         decoder.start(TEST_GIF);
         try
@@ -46,6 +49,9 @@ public class GifDecoderTest
                     Thread.sleep(1L);
                     continue;
                 }
+                BufferedImage image = frame.getImage();
+                frameSignatures.add(java.util.Arrays.hashCode(
+                    image.getRGB(0, 0, image.getWidth(), image.getHeight(), null, 0, image.getWidth())));
                 duration += frame.getDurationMillis();
                 decoded++;
                 frame.release();
@@ -57,6 +63,7 @@ public class GifDecoderTest
         }
         assertEquals(120, decoded);
         assertEquals(6000L, duration);
+        assertTrue("animated frames should not all be identical", frameSignatures.size() > 1);
     }
 
     @Test
@@ -120,9 +127,27 @@ public class GifDecoderTest
     {
         return new GifDecoder(
             new LoginScreenGifsConfig() { },
-            ignored -> ImageIO.createImageInputStream(new ByteArrayInputStream(gif)),
+            ignored -> new ByteArrayInputStream(gif),
             16,
             9);
+    }
+
+    @Test
+    public void createsThumbnailFromFirstGifFrame() throws Exception
+    {
+        BufferedImage thumbnail = GifThumbnailLoader.load(
+            new ByteArrayInputStream(createGif(2, 5)),
+            72,
+            42);
+        try
+        {
+            assertEquals(72, thumbnail.getWidth());
+            assertEquals(42, thumbnail.getHeight());
+        }
+        finally
+        {
+            thumbnail.flush();
+        }
     }
 
     private static byte[] createGif(int frameCount, int delayHundredths) throws IOException

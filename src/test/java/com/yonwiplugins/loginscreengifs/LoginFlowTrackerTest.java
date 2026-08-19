@@ -52,6 +52,30 @@ public class LoginFlowTrackerTest
     }
 
     @Test
+    public void keepsBackgroundStableWhileChangingLoginWorlds()
+    {
+        LoginFlowTracker tracker = new LoginFlowTracker();
+        tracker.accept(GameState.LOGIN_SCREEN);
+
+        LoginFlowTracker.Transition hopping = tracker.accept(GameState.HOPPING);
+        assertFalse(hopping.shouldRestoreBackground());
+        assertTrue(hopping.isBackgroundVisible());
+        assertFalse(hopping.isFrameUpdatesAllowed());
+        assertTrue(tracker.isLoginScreenWorldSwitchActive());
+
+        LoginFlowTracker.Transition loading = tracker.accept(GameState.LOADING);
+        assertFalse(loading.shouldRestoreBackground());
+        assertTrue(loading.isBackgroundVisible());
+        assertFalse(loading.isFrameUpdatesAllowed());
+
+        LoginFlowTracker.Transition returned = tracker.accept(GameState.LOGIN_SCREEN);
+        assertFalse(returned.isLoginStarted());
+        assertTrue(returned.isBackgroundVisible());
+        assertTrue(returned.isFrameUpdatesAllowed());
+        assertFalse(tracker.isLoginScreenWorldSwitchActive());
+    }
+
+    @Test
     public void failedHopCanBecomeARealLoginScreen()
     {
         LoginFlowTracker tracker = new LoginFlowTracker();

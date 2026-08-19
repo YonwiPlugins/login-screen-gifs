@@ -10,7 +10,9 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -66,6 +68,9 @@ public class LoginScreenGifsPlugin extends Plugin
     @Inject
     private GifDecoder decoder;
 
+    @Inject
+    private GifThumbnailCache thumbnailCache;
+
     private final AtomicBoolean frameUpdateQueued = new AtomicBoolean();
     private LoginFlowTracker flowTracker;
     private ExecutorService libraryExecutor;
@@ -74,6 +79,7 @@ public class LoginScreenGifsPlugin extends Plugin
     private LoginScreenGifsPanel panel;
     private NavigationButton navigationButton;
     private List<File> gifFiles = Collections.emptyList();
+    private Map<File, BufferedImage> thumbnails = Collections.emptyMap();
     private final ArrayDeque<Integer> shuffleQueue = new ArrayDeque<>();
     private File currentGif;
     private int currentGifIndex = -1;
@@ -147,6 +153,8 @@ public class LoginScreenGifsPlugin extends Plugin
         decoder.stop();
         decoderRunning = false;
         resetPlayback();
+        thumbnails = Collections.emptyMap();
+        thumbnailCache.close();
 
         NavigationButton button = navigationButton;
         navigationButton = null;
@@ -226,6 +234,8 @@ public class LoginScreenGifsPlugin extends Plugin
                     applyLibrary(files, preferred);
                     showImportSummary(summary);
                 });
+                Map<File, BufferedImage> previews = loadThumbnails(files);
+                applyThumbnailsIfCurrent(files, previews);
             }
             catch (IOException | RuntimeException ex)
             {
@@ -271,7 +281,7 @@ public class LoginScreenGifsPlugin extends Plugin
                 return;
             }
             panel = new LoginScreenGifsPanel(this, configManager, config, library.getDirectory());
-            panel.updateFiles(gifFiles, currentGif);
+            panel.updateFiles(gifFiles, currentGif, thumbnails);
             navigationButton = NavigationButton.builder()
                 .tooltip("Login Screen GIFs")
                 .icon(createPanelIcon())
@@ -306,6 +316,8 @@ public class LoginScreenGifsPlugin extends Plugin
                         showPanelStatus("Library refreshed", false);
                     }
                 });
+                Map<File, BufferedImage> previews = loadThumbnails(files);
+                applyThumbnailsIfCurrent(files, previews);
             }
             catch (IOException | RuntimeException ex)
             {
@@ -319,6 +331,7 @@ public class LoginScreenGifsPlugin extends Plugin
     {
         File previous = currentGif;
         gifFiles = discovered;
+        retainAvailableThumbnails(discovered);
         shuffleQueue.clear();
         if (gifFiles.isEmpty())
         {
@@ -473,10 +486,16 @@ public class LoginScreenGifsPlugin extends Plugin
         }
         try
         {
-            currentSprite = ImageUtil.getImageSpritePixels(frame.getImage(), client);
-            client.setLoginScreen(currentSprite);
+            SpritePixels nextSprite = ImageUtil.getImageSpritePixels(frame.getImage(), client);
+            // Reinstalling the login-screen sprite rebuilds the title UI and closes
+            // the vanilla world selector. Keep one installed sprite and update it.
+            if (!loginScreenApplied || !copyFramePixels(currentSprite, nextSprite))
+            {
+                currentSprite = nextSprite;
+                client.setLoginScreen(currentSprite);
+                loginScreenApplied = true;
+            }
             client.setShouldRenderLoginScreenFire(false);
-            loginScreenApplied = true;
             nextFrameAtNanos = now + TimeUnit.MILLISECONDS.toNanos(frame.getDurationMillis());
             if (authenticatorActive)
             {
@@ -535,6 +554,25 @@ public class LoginScreenGifsPlugin extends Plugin
         return GifSelection.next(gifFiles.size(), currentIndex, 1);
     }
 
+    static boolean copyFramePixels(SpritePixels installed, SpritePixels next)
+    {
+        if (installed == null || next == null
+            || installed.getWidth() != next.getWidth()
+            || installed.getHeight() != next.getHeight())
+        {
+            return false;
+        }
+
+        int[] installedPixels = installed.getPixels();
+        int[] nextPixels = next.getPixels();
+        if (installedPixels == null || nextPixels == null || installedPixels.length != nextPixels.length)
+        {
+            return false;
+        }
+        System.arraycopy(nextPixels, 0, installedPixels, 0, nextPixels.length);
+        return true;
+    }
+
     private void selectIndex(int index, boolean restart, boolean resetShuffle)
     {
         if (index < 0 || index >= gifFiles.size())
@@ -588,7 +626,6 @@ public class LoginScreenGifsPlugin extends Plugin
             decoder.stop();
             decoderRunning = false;
         }
-        currentSprite = null;
         nextFrameAtNanos = 0L;
         if (backgroundVisible && currentGif != null)
         {
@@ -644,8 +681,61 @@ public class LoginScreenGifsPlugin extends Plugin
         LoginScreenGifsPanel currentPanel = panel;
         if (currentPanel != null)
         {
-            currentPanel.updateFiles(gifFiles, currentGif);
+            currentPanel.updateFiles(gifFiles, currentGif, thumbnails);
         }
+    }
+
+    private Map<File, BufferedImage> loadThumbnails(List<File> files)
+    {
+        Map<File, BufferedImage> previews = new LinkedHashMap<>();
+        for (File file : files)
+        {
+            if (!running)
+            {
+                break;
+            }
+            try
+            {
+                previews.put(file, thumbnailCache.get(file));
+            }
+            catch (IOException | RuntimeException ex)
+            {
+                log.debug("Unable to load GIF thumbnail for {}", file, ex);
+            }
+        }
+        return Collections.unmodifiableMap(previews);
+    }
+
+    private void applyThumbnailsIfCurrent(List<File> expectedFiles, Map<File, BufferedImage> previews)
+    {
+        clientThread.invokeLater(() ->
+        {
+            if (!running || !gifFiles.equals(expectedFiles))
+            {
+                return;
+            }
+            thumbnails = previews;
+            updatePanel();
+        });
+    }
+
+    private void retainAvailableThumbnails(List<File> availableFiles)
+    {
+        if (thumbnails.isEmpty())
+        {
+            return;
+        }
+
+        Map<File, BufferedImage> retained = new LinkedHashMap<>();
+        for (File file : availableFiles)
+        {
+            BufferedImage image = thumbnails.get(file);
+            if (image != null)
+            {
+                retained.put(file, image);
+            }
+        }
+        thumbnails = Collections.unmodifiableMap(retained);
     }
 
     private void showImportSummary(GifLibrary.ImportSummary summary)
